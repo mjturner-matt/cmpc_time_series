@@ -1,7 +1,25 @@
-# cmpc_financial_time_series
-Time series analysis of CMPC financial statements.
+# cmpc_time_series
+Time series analysis of CMPC data.
 
-# inputs
+# Setup 
+To install necessary requirments.
+'''
+pip install -r requirements.txt
+'''
+Rerun this command periodically to ensure versions are compatible with the latest version of this package.
+
+Once requirements are installed, you may test the installation of streamlit using 'streamlit hello' .
+
+This package contains two interfaces: a command line app and a web app.  The command line app is in maintenance only mode.  To run, navigate to the root directory for the package in the terminal and run 'python command_line_app.py --help' for instructions.
+
+To run the web interface, use
+'''
+streamlit run web_app.py
+'''
+
+In both cases, input files must be of the appropriate format chosen, as described in inputs.
+
+# Inputs
 The package accepts the following input formats for both endogeneous and exogeneous data.
 
 Endogeneous data:
