@@ -67,10 +67,10 @@ def main(sys_args):
     if args.pca:
         # TODO what if want db but not pca in model
         pca_data = data.PCA()
-        cmpc_exog = pca_data.get_exogeneous_data()
+        cmpc_exog = pca_data.exogeneous_data
         cmpc_future_exog = pca_data.get_future_exogeneous()
     else:
-        cmpc_exog = data.get_exogeneous_data()
+        cmpc_exog = data.exogeneous_data
         cmpc_future_exog = data.get_future_exogeneous()
 
     if args.model == 'brute':

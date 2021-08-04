@@ -32,7 +32,6 @@ class TestData(unittest.TestCase):
     #   raises: ValueError, None
     #   IntersectionError: raises, none
     # Partition on exogenous_data:
-    #   cols: None, specified
     #   len: 1, >1
     #   # vars: 1, >1
     # Partition on endogeneous_data:
@@ -66,7 +65,7 @@ class TestData(unittest.TestCase):
         self.assertEqual(expected.index.freqstr, result.index.freqstr)
 
     def compare_data_helper(self, data : TimeSeriesData, expected_exogeneous, expected_endogeneous, expected_future_exogeneous):
-        result_exogeneous = data.get_exogeneous_data()
+        result_exogeneous = data.exogeneous_data
         result_endogeneous = data.endogeneous_data
         result_future_exogeneous = data.get_future_exogeneous()
 
@@ -80,7 +79,7 @@ class TestData(unittest.TestCase):
     #   # futue periods = 0, exogeneous obs/period = 0, exog start = None, exog end = None,
     #   endogeneous var name len >1, ValueError = None, IntersectionError = None
     # Partition on exogeneous_data:
-    #   cols: None, len = 1, # vars = 0
+    #   len = 1, # vars = 0
     # Partition on endogeneous data:
     #   len = 1
     # Partition on futue_exogeneous_data
@@ -116,7 +115,7 @@ class TestData(unittest.TestCase):
 
         explained_variance = 0.5
         for data in [original_data, original_data.PCA(explained_variance)]:
-            result_exogeneous = data.get_exogeneous_data()
+            result_exogeneous = data.exogeneous_data
             result_endogeneous = data.endogeneous_data
             result_future_exogeneous = data.get_future_exogeneous()
             result_exogeneous_cols = data.exogeneous_vars
@@ -215,7 +214,7 @@ class TestData(unittest.TestCase):
                                             dtype='float64',
                                             columns=exogeneous_cols)
         data = TimeSeriesData(exogeneous_data, endogeneous_data, endogeneous_var)
-        result_exogeneous = data.get_exogeneous_data()
+        result_exogeneous = data.exogeneous_data
         result_endogeneous = data.endogeneous_data
         result_future_exogeneous_multiple = data.get_future_exogeneous(vars=['myVar'])
         result_future_exogeneous_single = data.get_future_exogeneous(horizon=1)
@@ -241,7 +240,7 @@ class TestData(unittest.TestCase):
                                                     columns=downsample_exogeneous_cols)
         explained_variance = 0.0
         for downsample_data in [data.downsample(downsample_exogeneous_cols), data.PCA(explained_variance)]:
-            self.assert_equal_dataframes(expected_downsample_exogeneous, downsample_data.get_exogeneous_data())
+            self.assert_equal_dataframes(expected_downsample_exogeneous, downsample_data.exogeneous_data)
             self.assert_equal_dataframes(expected_endogeneous, downsample_data.endogeneous_data)
             self.assert_equal_dataframes(expected_downsample_future_exogeneous, downsample_data.get_future_exogeneous())
             self.assertEqual(set(downsample_exogeneous_cols), set(downsample_data.exogeneous_vars))
@@ -255,7 +254,7 @@ class TestData(unittest.TestCase):
     #   # future periods = 0, # exog obs/ period >1, exog start = before endog, exog end: before endog,
     #   endogeneous var name len >1, ValueError = None, IntersectionError = None
     # Partition on exogenous_data:
-    #   cols: none, len = 1, # vars >1
+    #   len = 1, # vars >1
     # Partition on endogeneous_data:
     #   len = 1
     # Partition on future_exogeneous_data:
@@ -300,7 +299,7 @@ class TestData(unittest.TestCase):
                                             columns=exogeneous_cols)
         original_data = TimeSeriesData(exogeneous_data, endogeneous_data, endogeneous_var)
         for data in (original_data, original_data.downsample(exogeneous_cols)):
-            result_exogeneous = data.get_exogeneous_data()
+            result_exogeneous = data.exogeneous_data
             result_endogeneous = data.endogeneous_data
             with self.assertRaises(ValueError):
                 data.get_future_exogeneous(horizon=1)
@@ -318,7 +317,7 @@ class TestData(unittest.TestCase):
         # Test PCA: Resulting dataframe should only have 1 col
         # spec not strong enough to determine what value col takes
         data_PCA = original_data.PCA(explained_variance)
-        self.assertEqual((1,1), data_PCA.get_exogeneous_data().shape)
+        self.assertEqual((1,1), data_PCA.exogeneous_data.shape)
         self.assertEqual((1,), data_PCA.endogeneous_data.shape)
         self.assertEqual((0,1), data_PCA.get_future_exogeneous().shape)
         # column names change, but still should be same num and no duplicates

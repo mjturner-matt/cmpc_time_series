@@ -68,7 +68,7 @@ D = st.sidebar.number_input('D', min_value=0, value=0)
 Q = st.sidebar.number_input('Q', min_value=0, value=0)
 m = st.sidebar.number_input('m', min_value=0, value=4)
 st.sidebar.text('Prediction horizon')
-horizon = st.sidebar.number_input('horizon', min_value=0, max_value=len(ts_data_original.get_future_exogeneous()))
+horizon = st.sidebar.number_input('horizon', min_value=0, max_value=len(ts_data_original.get_future_exogeneous()), value=len(ts_data_original.get_future_exogeneous()))
 st.sidebar.text('Sliding window training size')
 # TODO allow to 0 and 1
 training_percentage = st.sidebar.slider('select percentage training data for sliding window forecast', min_value=0.05, max_value=1.0, value=0.80, step=0.05)
@@ -76,7 +76,7 @@ training_percentage = st.sidebar.slider('select percentage training data for sli
 # GET DATA
 ts_data_downsample = get_ts_data_after_downsample(ts_data_original, exogeneous_vars)
 ts_data = get_ts_data_after_PCA(ts_data_downsample, pca, pca_percentage)
-exogeneous_data = ts_data.get_exogeneous_data()
+exogeneous_data = ts_data.exogeneous_data
 endogeneous_data = ts_data.endogeneous_data
 future_exogeneous_data = ts_data.get_future_exogeneous()
 

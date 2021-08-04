@@ -33,7 +33,7 @@ a transformed time series dataset of the same datatype.
 
 Typical usage examples:
 foo = TimeSeriesData(exogeneous_data, endogeneous_data, endogeneous_var)
-foo.get_exogeneous_data()
+foo.exogeneous_data()
 foo.PCA()
 '''
 
@@ -293,8 +293,13 @@ class TimeSeriesData():
 
     @property
     def endogeneous_data(self) -> pd.Series:
-        '''Endogeneous data in float64 format'''
+        '''Endogeneous data in float64 format indexed by PeriodIndex.'''
         return pd.Series(self._db.loc[:, self.endogeneous_var], dtype='float64').copy()
+
+    @property
+    def exogeneous_data(self) -> pd.DataFrame:
+        '''Exogeneous data in float64 format indexed by PeriodIndex.'''
+        return self._db.loc[:, self._exogeneous_vars].copy()
 
     # Observers
     def plot_endogeneous(self) -> pd.Series:
@@ -306,15 +311,6 @@ class TimeSeriesData():
         '''Creates an autocorrelation plot for the endogeneous var.'''
         # TODO fix wrong time periods on axes
         return pdplot.autocorrelation_plot(self._db.loc[:,self.endogeneous_var])
-
-    def head(self, num_rows =5):
-        '''
-        Return the head of the database.
-
-        Keyword arguments:
-        num_rows -- number of rows to display (default: 5)
-        '''
-        return self._db.head(num_rows)
     
     def get_exogeneous_data(self, vars=None) -> pd.DataFrame:
         '''
