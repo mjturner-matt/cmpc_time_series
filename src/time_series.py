@@ -178,13 +178,17 @@ class SARIMARegression():
 
         for train_start_index in range(n- train_size):
             # Get data
-            exog_data = exogeneous_data.iloc[train_start_index: train_start_index + train_size, :]
             endog_data = endogeneous_data.iloc[train_start_index : train_start_index + train_size]
 
             # get next values for prediction
-            next_exog = pd.DataFrame(exogeneous_data.iloc[train_start_index + train_size]).transpose()
             next_endog = endogeneous_data.iloc[train_start_index + train_size]
 
+            if exogeneous_data is not None:
+                exog_data = exogeneous_data.iloc[train_start_index: train_start_index + train_size, :]
+                next_exog = pd.DataFrame(exogeneous_data.iloc[train_start_index + train_size]).transpose()
+            else:
+                exog_data = None
+                next_exog = None
             # run model
             fit = self._fit_model(endog_data, exog_data, p_d_q_order, P_D_Q_order)
             # returns as series, convert to float
@@ -336,12 +340,13 @@ class SARIMARegression():
         # assert precondition - fail fast
         assert 0 < window_size <= 1
         # TODO update underlying method
+        window_len = max(math.ceil(window_size * len(y)), 1)
         if len(X.columns) == 0:
             X = None
+            X_check = None
         else:
             X = X
-        window_len = max(math.ceil(window_size * len(y)), 1)
-        X_check = None if X is None else X.iloc[:window_len]
+            X_check = X.iloc[:window_len]
         if self._check_overspecified(y.iloc[:window_len], X_check):
             raise OverspecifiedError('window_size results in a model that is overspecified.')
 
@@ -352,13 +357,6 @@ class SARIMARegression():
         self._checkrep()
         idx = y.index[len(y)-n_predictions:]
         return pd.DataFrame({'predictions': yhats, 'actuals': actuals}, index=idx, dtype='float64')
-
-    # def n_diffs(self, y):
-    #     '''
-    #     Performs a KPSS test to estimate the necessary order of differencing.
-    #     '''
-    #     self._checkrep()
-    #     return ndiffs(y, test='kpss')
 
     
 class AutoARIMARegression(SARIMARegression):

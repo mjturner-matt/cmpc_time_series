@@ -269,6 +269,26 @@ class TestRegression():
         with self.assertRaises(OverspecifiedError):
             model.predict(1, y, X)
 
+    # Test cases resulting from bugs
+    def test_no_exog_sliding_window(self):
+        n_obs = 11
+        idx = pd.period_range(start=pd.Period(year=2020, month=11, freq='M'), periods=n_obs, freq='M')
+        y = pd.Series(np.random.rand(n_obs),
+                        index=idx,
+                        dtype='float64',
+                        name='endogeneous')
+        X = pd.DataFrame(
+                        index=idx,
+                        dtype='float64',
+                        columns=[]
+        )
+
+        p_d_q_order = (0,0,0)
+        P_D_Q_order = (0,0,0,12)
+        model = self.model(p_d_q_order, P_D_Q_order)
+
+        self.check_sliding_forecast(y, model.sliding_window_forecast(y, X, window_size=0.8))
+
 class TestSARIMARegression(unittest.TestCase, TestRegression):
 
     model = SARIMARegression
