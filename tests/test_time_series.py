@@ -120,7 +120,7 @@ class TestRegression():
         self.check_predictions(y, yhat)
 
         with self.assertRaises(OverspecifiedError):
-            model.sliding_window_forecast(y, window_size=0.001)
+            model.sliding_window_forecast(y, X, window_size=0.001)
 
 
     # Covers:
