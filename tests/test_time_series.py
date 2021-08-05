@@ -2,13 +2,16 @@ from numpy.core.defchararray import index
 from src.time_series import AutoARIMARegression, BruteForceARIMARegression, SARIMARegression, OverspecifiedError
 import unittest
 from unittest import mock
+from unittest.mock import call, patch
 
 import pandas as pd
 import datetime as dt
 import numpy as np
 from statsmodels.iolib import summary
 
-class TestRegression():
+from tests.test_utils import TestUtils
+
+class TestRegression(TestUtils):
     '''Tests for SARImARegression'''
 
     # Testing strategy:
@@ -108,7 +111,7 @@ class TestRegression():
 
         p_d_q_order = (0,0,0)
         P_D_Q_order = (0,0,0,12)
-        model = self.model(p_d_q_order, P_D_Q_order)
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
         self.assertEqual(p_d_q_order, model.p_d_q_order)
         self.assertEqual(P_D_Q_order, model.P_D_Q_order)
@@ -149,8 +152,7 @@ class TestRegression():
         # total order = 8 + 1 x vars + 1 trend
         p_d_q_order = (1,0,0)
         P_D_Q_order = (1,0,0,2)
-        model = self.model(p_d_q_order, P_D_Q_order)
-
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
         self.assertEqual(p_d_q_order, model.p_d_q_order)
         self.assertEqual(P_D_Q_order, model.P_D_Q_order)
@@ -189,8 +191,7 @@ class TestRegression():
         # total order = 7 + 2 x vars + 1 trend
         p_d_q_order = (1,2,3)
         P_D_Q_order = (1,1,2,4)
-        model = self.model(p_d_q_order, P_D_Q_order)
-
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
         self.assertEqual(p_d_q_order, model.p_d_q_order)
         self.assertEqual(P_D_Q_order, model.P_D_Q_order)
@@ -228,8 +229,7 @@ class TestRegression():
         # total order = 7 + 2 x vars + 1 trend
         p_d_q_order = (0,0,0)
         P_D_Q_order = (0,0,0,12)
-        model = self.model(p_d_q_order, P_D_Q_order)
-
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
         n=0
         yhat = model.predict(n, y, X, future_X)
@@ -261,7 +261,7 @@ class TestRegression():
 
         p_d_q_order = (0,0,0)
         P_D_Q_order = (0,0,0,12)
-        model = self.model(p_d_q_order, P_D_Q_order)
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
         
         with self.assertRaises(OverspecifiedError):
             model.fit(y, X)
@@ -285,13 +285,17 @@ class TestRegression():
 
         p_d_q_order = (0,0,0)
         P_D_Q_order = (0,0,0,12)
-        model = self.model(p_d_q_order, P_D_Q_order)
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
         self.check_sliding_forecast(y, model.sliding_window_forecast(y, X, window_size=0.8))
 
 class TestSARIMARegression(unittest.TestCase, TestRegression):
 
     model = SARIMARegression
+
+    def create_model(self, y, X, p_d_q_order, P_D_Q_order):
+        '''Creates a model object for this test class.'''
+        return SARIMARegression(p_d_q_order, P_D_Q_order)
 
     # Covers:
     # Partition on __init__:
@@ -310,7 +314,7 @@ class TestSARIMARegression(unittest.TestCase, TestRegression):
         p_d_q_order = (2,1,1)
         P_D_Q_order = (2,3,1,2)
         with self.assertRaises(ValueError):
-            model = self.model(p_d_q_order, P_D_Q_order)
+            model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
     test_overspecified_n_obs = 10
 
@@ -318,13 +322,80 @@ class TestAutoARIMARegression(unittest.TestCase, TestRegression):
 
     model = AutoARIMARegression
 
+    def create_model(self, y, X, p_d_q_order, P_D_Q_order):
+        '''Creates a model object for this test class.'''
+        return AutoARIMARegression(p_d_q_order, P_D_Q_order)
+
     test_overspecified_n_obs = 1
 
-    # TODO test_seasonal_two equivalent
+    # Covers:
+    # Partition on __init__:
+    #   p>1, d=1, q=1, P>1, D>1, Q=1, m=1
+    def test_seasonal_two(self):
+        n_obs = 9
+        idx = pd.period_range(start=pd.Period(year=2007, month=2, freq='M'), periods=n_obs, freq='M')
+        y = pd.Series(data=np.ones(n_obs),
+                        index=idx,
+                        dtype='float64')
+        X = pd.DataFrame(data=np.random.rand(n_obs),
+                        index=idx,
+                        dtype='float64')
+
+        # order 6 + 1 X var + 1 trend, only need 9 obs
+        p_d_q_order = (2,1,1)
+        P_D_Q_order = (2,3,1,2)
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
+
+class TestBruteForceARIMARegression(unittest.TestCase, TestRegression):
+
+    # relies on assumption that determine_opt_order is only run once,
+    # so we only have to patch it in here.
+    @patch('src.time_series.BruteForceARIMARegression.determine_opt_order')
+    def create_model(self, y, X, p_d_q_order, P_D_Q_order, mock_determine_opt_order):
+        '''Creates a model object for this test class.'''
+        p,d,q = p_d_q_order
+        P,D,Q,m = P_D_Q_order
+        order_arg_ranges = (range(0,p), #p
+                            range(0,d), #d
+                            range(0,q), #q
+                            range(0,P), #P
+                            range(0,D), #D
+                            range(0,Q), #Q,
+                            range(m, m+1)) #m
+        
+        mock_determine_opt_order.return_value = (p,d,q,P,D,Q,m)
+
+        model = BruteForceARIMARegression(y, X, order_arg_ranges)
+
+        mock_determine_opt_order.assert_called_once()
+        call_y, call_X, call_training_window_size, call_order_arg_ranges = mock_determine_opt_order.call_args.args
+
+        self.assert_equal_series(y, call_y)
+        self.assert_equal_dataframes(X, call_X)
+        self.assertTrue(len(y) >= call_training_window_size)
+        self.assertTrue(0 <= call_training_window_size)
+        self.assertEqual(order_arg_ranges, call_order_arg_ranges)
+
+        return model
+
+    test_overspecified_n_obs = 1
+
+    # Covers:
+    # Partition on __init__:
+    #   p>1, d=1, q=1, P>1, D>1, Q=1, m=1
+    def test_seasonal_two(self):
+        n_obs = 9
+        idx = pd.period_range(start=pd.Period(year=2007, month=2, freq='M'), periods=n_obs, freq='M')
+        y = pd.Series(data=np.ones(n_obs),
+                        index=idx,
+                        dtype='float64')
+        X = pd.DataFrame(data=np.random.rand(n_obs),
+                        index=idx,
+                        dtype='float64')
+
+        # order 6 + 1 X var + 1 trend, only need 9 obs
+        p_d_q_order = (2,1,1)
+        P_D_Q_order = (2,3,1,2)
+        model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
 
-BruteForceARIMARegression.determine_opt_order = mock.MagicMock()
-
-# class TestBruteForceARIMARegression(unittest.TestCase, TestRegression):
-
-#     None

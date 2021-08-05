@@ -301,6 +301,10 @@ class TimeSeriesData():
         '''Exogeneous data in float64 format indexed by PeriodIndex.'''
         return self._db.loc[:, self._exogeneous_vars].copy()
 
+    @property
+    def future_exogeneous_data(self) -> pd.DataFrame:
+        return self._future_db.copy()
+
     # Observers
     def plot_endogeneous(self) -> pd.Series:
         '''Plots the endogeneous var.'''
@@ -326,6 +330,7 @@ class TimeSeriesData():
         KeyError if any of cols is not an exogeneous var.
         '''
         # can't get endog data from this function
+        # raise DeprecationWarning('get_exogeneous_data will be eliminated in a future version.  Use exogeneous_data instead.')
         return_cols = vars if vars else self._exogeneous_vars
         if self.endogeneous_var in return_cols:
             raise KeyError('endogeneous_var is not exogeneous')
@@ -350,6 +355,7 @@ class TimeSeriesData():
         ValueError if horizon is greater than available exogeneous data
         KeyError if any of vars are not in the data.
         '''
+        # raise DeprecationWarning('get_future_exogeneous will be eliminated in a future version.  Use future_exogeneous_data instead.')
         return_cols = vars if vars else self._exogeneous_vars
 
         if horizon:
@@ -526,11 +532,17 @@ class TimeSeriesData():
     def ADF_test(self):
         '''
         Performs an ADF test on whether the endogeneous variable of the time series is stationary.
+
+        Returns:
+        The order of recommended differencing as an integer between 0 and 2.
         '''
         return arima.ndiffs(self._db.loc[:,self.endogeneous_var], test='adf')
 
     def KPSS_test(self):
         '''
         Performs a KPSS test for whether the endogeneous variable of the time series is stationary.
+
+        Returns:
+        The order of recommended differencing as an integer between 0 and 2.
         '''
         return arima.ndiffs(self._db.loc[:,self.endogeneous_var], test='kpss')

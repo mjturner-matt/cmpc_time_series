@@ -1,22 +1,13 @@
 from src.data import *
+from tests.test_utils import TestUtils
 import unittest
 import pandas as pd
 import numpy as np
 import datetime as dt
 
-import traceback
-import warnings
-import sys
+# warnings.showwarning = warn_with_traceback
 
-def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
-    '''Print traceback for all warnings'''
-    log = file if hasattr(file,'write') else sys.stderr
-    traceback.print_stack(file=log)
-    log.write(warnings.formatwarning(message, category, filename, lineno, line))
-
-warnings.showwarning = warn_with_traceback
-
-class TestData(unittest.TestCase):
+class TestData(TestUtils, unittest.TestCase):
     '''Tests for data class'''
 
     # Testing strategy:
@@ -37,11 +28,8 @@ class TestData(unittest.TestCase):
     # Partition on endogeneous_data:
     #   len: 1, >1
     # Partition on future_exogeneous_data:
-    #   cols = None, specified
-    #   horizon = None, 0, 1, >1
     #   len: 0, 1 , >1
     #   # vars: 0, 1, >1
-    #   Raises: ValueError, None
     # Partition on exogeneous_vars:
     #   # cols: 0, 1, >1
     # Partition on downsample:
@@ -52,26 +40,18 @@ class TestData(unittest.TestCase):
     #   # exogeneous_vars: 0, 1, >1
     #   # exogeneous observations: 1, >1
     #   # exog vs # observations: exog>obs, exog=obs, exog<obs
+    # ADF_test -- no need to test since one liner
+    # KPSS_test -- no need to test since one liner
 
-    def assert_equal_dataframes(self, expected, result):
-        '''
-        Asserts two series are equal in:
-        - Elements (including order)
-        - Value and frequency of indices
-        - dtype
-        '''
-        self.assertTrue(expected.equals(result))
-        self.assertTrue(expected.index.equals(result.index))
-        self.assertEqual(expected.index.freqstr, result.index.freqstr)
 
-    def compare_data_helper(self, data : TimeSeriesData, expected_exogeneous, expected_endogeneous, expected_future_exogeneous):
-        result_exogeneous = data.exogeneous_data
-        result_endogeneous = data.endogeneous_data
-        result_future_exogeneous = data.get_future_exogeneous()
+    # def compare_data_helper(self, data : TimeSeriesData, expected_exogeneous, expected_endogeneous, expected_future_exogeneous):
+    #     result_exogeneous = data.exogeneous_data
+    #     result_endogeneous = data.endogeneous_data
+    #     result_future_exogeneous = data.get_future_exogeneous()
 
-        self.assert_equal_dataframes(expected_exogeneous, result_exogeneous)
-        self.assert_equal_dataframes(expected_endogeneous, result_endogeneous)
-        self.assert_equal_dataframes(expected_future_exogeneous, result_future_exogeneous)
+    #     self.assert_equal_dataframes(expected_exogeneous, result_exogeneous)
+    #     self.assert_equal_dataframes(expected_endogeneous, result_endogeneous)
+    #     self.assert_equal_dataframes(expected_future_exogeneous, result_future_exogeneous)
 
     # Covers:
     # Partition on __init__
