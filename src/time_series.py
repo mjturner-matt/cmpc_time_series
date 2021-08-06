@@ -167,9 +167,31 @@ class SARIMARegression():
         model_fit = ar.fit(cov_type='robust', maxiter=self.max_iter, full_output=False, disp=False)
         return model_fit
 
-    def _sliding_window(self, endogeneous_data, exogeneous_data, p_d_q_order, P_D_Q_order, train_size):
+    def _sliding_window(self, endogeneous_data, exogeneous_data, p_d_q_order, P_D_Q_order, train_size : int):
         '''
-        Calculates a rolling forecast, according to the spec for 
+        Conducts a sliding window forecast using the model.  
+        
+        For each possible block of consecutive time periods of size train_size,
+        uses the first n-1 of the n-sized block as training data and tests using the last observation.
+
+        Keyword arguments:
+        y -- the endogeneous data Series in float64 format with a PeriodIndex.  Requires len(y) >=1.
+        X - the exogeneous DataFrame in float64 format with a PeriodIndex (Optional).  If None, regression 
+            only including endogeneous data and lags is conducted.
+            Requires len(y) == len(X).
+        p_d_q_order -- the order of the model in (p,d,q) format.
+        P_D_Q_order -- the seasonal order of the model in (P,D,Q,m) format.
+        train_size -- the length of the training window.  Requires 1 <= train_size < len(y)
+            and train_size to be large enough that the model is not overspecified.
+            # TODO define these terms better
+
+        Returns:
+        A tuple of the form (yhats, actuals) of numpy arrays, each of length len(y) - train_size
+        containing no infs or nulls.  yhats[i] represents the prediction for the (len(y) - 1 - train_size + i)th 
+        element of y, and actual[i] = y[len(y) - 1 - train_size + i].
+
+        Raises:
+        # TODO does it raise valueError if lags of same order???
         '''
         n = len(endogeneous_data)
 
@@ -485,7 +507,7 @@ class BruteForceARIMARegression(SARIMARegression):
         Initializes a new class instance.
 
         Keyword arguments:
-        y -- the endogeneous data
+        y -- the endogeneous data.  Requires len(y) >=2
         X -- the exogeneous data.  Requires len(y) == len(X)
         order_arg_ranges -- a tuple of range objects of the form (p, d, q, P, D, Q, m)
             where p, d, q, P, D, Q, and m are the ranges for their respective order arguments.
@@ -498,6 +520,10 @@ class BruteForceARIMARegression(SARIMARegression):
                 range(0,2), #D
                 range(0,2), #Q
                 range(4,5)) #m
+
+        Raises:
+        OverspecifiedError if all models allowed by order_arg_ranges would be overspecified.
+        ValueError if all models allowed contain seasonal and ordinary lag of the same order.
         '''
         # Determine the size of the training window when performing rolling
         # forecasting for the optimal
@@ -506,7 +532,7 @@ class BruteForceARIMARegression(SARIMARegression):
 
         n = len(y)
         # TODO maybe call rolling_window which calculates window size automatically
-        training_window_size = math.ceil(self.fraction_training_data * n)
+        training_window_size = min(max(math.ceil(self.fraction_training_data * n), 1), len(y)-1)
         order = self.determine_opt_order(y, X, training_window_size, order_arg_ranges)
         self._p_d_q_order = tuple(order[0:3])
         self._P_D_Q_order = tuple(order[3:])
@@ -516,13 +542,16 @@ class BruteForceARIMARegression(SARIMARegression):
 
     def determine_opt_order(self, y, X, training_window_size, order_arg_ranges):
         '''
+        Determines the optimal order for the SARIMA model y on X.
+
         Uses a brute force search over all combinations of parameters in
         order_arg_ranges to find which rolling window forecast of y on X of 
         size training_window_size results in the lowest rmse error on the predictions.
 
         Keyword arguments:
-        y -- endogeneous data
-        X -- exogeneous data.  Requires len(y) == len(X)
+        y -- the endogeneous data Series in float64 format with a PeriodIndex.  Requires len(y) >= 2.
+        X - the exogeneous DataFrame in float64 format with a PeriodIndex.  Requires len(y) == len(X)
+            If no exogeneous data, pass an empty DataFrame containing the required index.
         training_window_size -- the size of the training window.  Requires training_window_size < len(y)
         order_arg_ranges -- a tuple of range objects of the form (p, d, q, P, D, Q, m)
             where p, d, q, P, D, Q, and m are the ranges for their respective order arguments.
@@ -539,20 +568,42 @@ class BruteForceARIMARegression(SARIMARegression):
         Returns:
         A tuple of the form (p,d,q,P,D,Q,m) where each element is the optimal 
         whole number order argument.
+
+        Raises:
+        OverspecifiedError if all models allowed by order_arg_ranges would be overspecified.
+        ValueError if all models allowed contain seasonal and ordinary lag of the same order.
         '''
+        trend_order = 1
+        min_eval_obs = 1
+        # Fail fast - test if overspecified here.
+        # TODO take min of ranges
+        min_order_args_order = order_arg_ranges[0][0] + order_arg_ranges[2][0] + order_arg_ranges[3][0] + order_arg_ranges[5][0]
+        if not min_order_args_order + trend_order + X.shape[1] + min_eval_obs < len(y):
+            raise OverspecifiedError('Model is overspecified for every combination of order args given by order_arg_ranges.  Remove exogeneous vars or reduce order')
         min_rmse = float('inf')
         best_order_arg = None
+        if X.shape[1] == 0:
+            X = None
         for order_arg in range_combo_generator(order_arg_ranges):
             p_d_q_order = tuple(order_arg[0:3]) # p,d,q
             P_D_Q_order = tuple(order_arg[3:]) # P, D, Q, m
-            yhats, actuals = self._sliding_window(y, X, p_d_q_order, P_D_Q_order, training_window_size)
 
-            rmse = calc_rmse(yhats, actuals)
+            try:
+                yhats, actuals = self._sliding_window(y, X, p_d_q_order, P_D_Q_order, training_window_size)
+                rmse = calc_rmse(yhats, actuals)
+            except ValueError:
+                rmse = float('inf')
+            except OverspecifiedError:
+                rmse = float('inf')
             if rmse < min_rmse:
                 min_rmse = rmse
                 best_order_arg = order_arg
 
+        if best_order_arg is None:
+            raise ValueError('All models allowed by order_args contain seasonal and ordinary lags of the same order.')
         return best_order_arg
+
+        
 
 
 if __name__ == '__main__':

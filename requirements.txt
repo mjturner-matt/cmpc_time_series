@@ -24,6 +24,7 @@ et-xmlfile==1.1.0
 gitdb==4.0.7
 GitPython==3.1.18
 idna==3.2
+iniconfig==1.1.1
 ipykernel==6.0.3
 ipython==7.25.0
 ipython-genutils==0.2.0
@@ -60,17 +61,21 @@ patsy==0.5.1
 pexpect==4.8.0
 pickleshare==0.7.5
 Pillow==8.3.1
+pluggy==0.13.1
 pmdarima==1.8.2
 prometheus-client==0.11.0
 prompt-toolkit==3.0.19
 protobuf==3.17.3
 ptyprocess==0.7.0
+py==1.10.0
 pyarrow==4.0.1
 pycparser==2.20
 pydeck==0.6.2
 Pygments==2.9.0
 pyparsing==2.4.7
 pyrsistent==0.18.0
+pytest==6.2.4
+pytest-timeout==1.4.2
 python-dateutil @ file:///home/ktietz/src/ci/python-dateutil_1611928101742/work
 pytz @ file:///tmp/build/80754af9/pytz_1612215392582/work
 pyzmq==22.1.0
@@ -87,6 +92,7 @@ streamlit==0.85.0
 terminado==0.10.1
 testpath==0.5.0
 threadpoolctl==2.1.0
+timeout-decorator==0.5.0
 toml==0.10.2
 toolz==0.11.1
 tornado==6.1
