@@ -131,7 +131,6 @@ class TestRegression(TestUtils):
         with self.assertRaises(OverspecifiedError):
             model.sliding_window_forecast(y, X, window_size=0.001)
 
-
     # Covers:
     # Partition on __init__:
     #   p=1, d=0, q=0, P=1, D=0, Q=0, m=2, ValueError = None
@@ -322,7 +321,7 @@ class TestSARIMARegression(unittest.TestCase, TestRegression):
         p_d_q_order = (2,1,1)
         P_D_Q_order = (2,3,1,2)
         with self.assertRaises(ValueError):
-            model = self.create_model(y, X, p_d_q_order, P_D_Q_order)
+            self.create_model(y, X, p_d_q_order, P_D_Q_order)
 
     test_overspecified_n_obs = 10
 

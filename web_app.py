@@ -129,5 +129,7 @@ st.write(ts.predict(horizon, endogeneous_data, exogeneous_data, future_exogeneou
 st.header('Sliding window')
 sliding_window = ts.sliding_window_forecast(endogeneous_data, exogeneous_data, training_percentage)
 st.dataframe(sliding_window)
-st.pyplot(sliding_window.plot().figure)
+# plot doesn't work for empty dataframe
+if len(sliding_window) > 0:
+    st.pyplot(sliding_window.plot().figure)
 
