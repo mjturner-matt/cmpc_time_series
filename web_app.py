@@ -5,6 +5,23 @@ from src import import_data
 from src import data
 from src.utils import *
 from matplotlib import pyplot
+import base64
+
+# helper functions
+def get_table_download_link(dataframe : pd.DataFrame, filename : str) -> str:
+    """
+    Generates a link allowing the data in a given panda dataframe to be downloaded as filename.
+
+    Keyword arguments: 
+    dataframe -- a dataframe to be downloaded
+    filename -- name of downloaded file
+
+    Returns:
+    html representation for downloaded file.
+    """
+    csv = dataframe.to_csv(index=True)
+    b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
+    return f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download CSV File</a>'
 
 # Get data
 
@@ -43,7 +60,6 @@ exog_filename = st.sidebar.file_uploader('Upload exogeneous data')
 exog_file_type = st.sidebar.selectbox('Select exogeneous data file type', options=list(import_data.ExogeneousDataFormats))
 endog_var_name = st.sidebar.text_input('Endogeneous data name')
 
-
 # ORIGINAL DATA
 # for col selection purposes
 ts_data_original = get_ts_data(endog_filename, endog_file_type, exog_filename, exog_file_type, endog_var_name)
@@ -68,7 +84,8 @@ D = st.sidebar.number_input('D', min_value=0, value=0)
 Q = st.sidebar.number_input('Q', min_value=0, value=0)
 m = st.sidebar.number_input('m', min_value=0, value=4)
 st.sidebar.text('Prediction horizon')
-horizon = st.sidebar.number_input('horizon', min_value=0, max_value=len(ts_data_original.get_future_exogeneous()), value=len(ts_data_original.get_future_exogeneous()))
+# TODO add max value for horizon.  len(future exog) if some exog, else inf.
+horizon = st.sidebar.number_input('horizon', min_value=0, value=len(ts_data_original.get_future_exogeneous()))
 st.sidebar.text('Sliding window training size')
 # TODO allow to 0 and 1
 training_percentage = st.sidebar.slider('select percentage training data for sliding window forecast', min_value=0.05, max_value=1.0, value=0.80, step=0.05)
@@ -114,7 +131,9 @@ st.dataframe(exogeneous_data)
 
 # PCA
 st.header('PCA Covariance matrix')
-st.dataframe(ts_data_downsample.get_PCA_covariance_matrix())
+pca_cov_matrix = ts_data_downsample.get_PCA_covariance_matrix()
+st.dataframe(pca_cov_matrix)
+st.markdown(get_table_download_link(pca_cov_matrix, 'covariance_matrix.csv'), unsafe_allow_html=True)
 
 # Fit
 st.header('Model fit')
@@ -123,7 +142,9 @@ st.write(ts.fit(endogeneous_data, exogeneous_data))
 # Predict
 st.header('Model predict')
 # TODO doesnt work with brute
-st.write(ts.predict(horizon, endogeneous_data, exogeneous_data, future_exogeneous_data))
+predictions = ts.predict(horizon, endogeneous_data, exogeneous_data, future_exogeneous_data)
+st.dataframe(predictions)
+st.markdown(get_table_download_link(predictions, 'predictions.csv'), unsafe_allow_html=True)
 
 # Sliding window
 st.header('Sliding window')
@@ -132,4 +153,4 @@ st.dataframe(sliding_window)
 # plot doesn't work for empty dataframe
 if len(sliding_window) > 0:
     st.pyplot(sliding_window.plot().figure)
-
+st.markdown(get_table_download_link(sliding_window, 'sliding_window.csv'), unsafe_allow_html=True)

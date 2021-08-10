@@ -644,7 +644,7 @@ class BruteForceARIMARegression(SARIMARegression):
         # TODO maybe call rolling_window which calculates window size automatically
         training_window_size = min(max(math.ceil(self.fraction_training_data * n), 1), len(y)-1)
         order = self.determine_opt_order(y, X, training_window_size, order_arg_ranges)
-        print(order)
+
         self._p_d_q_order = tuple(order[0:3])
         self._P_D_Q_order = tuple(order[3:])
 
