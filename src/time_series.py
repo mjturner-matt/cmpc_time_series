@@ -12,7 +12,10 @@ from pandas import plotting as pdplot
 import numpy as np
 from pandas.core.frame import DataFrame
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.statespace import mlemodel
+from statsmodels.iolib import summary
 from statsmodels.tsa.stattools import adfuller, kpss
+from statsmodels.regression import linear_model
 from sklearn.metrics import mean_squared_error
 from math import sqrt
 from copy import deepcopy
@@ -26,6 +29,7 @@ from pmdarima import model_selection
 from pmdarima.arima.utils import ndiffs
 
 from matplotlib import pyplot as plt
+from streamlit.state.session_state import Value
 
 from src.utils import *
 from src.data import TimeSeriesData
@@ -66,7 +70,6 @@ class OverspecifiedError(Exception):
     the number of observations.
     '''
 
-
 class SARIMARegression():
     '''
     Represents an immutable SARIMA time series regression model.
@@ -106,17 +109,9 @@ class SARIMARegression():
             Requires P,D, and Q to be >=0.  Requires m>=2
         
         Raises:
-        ValueError if the model contains any seasonal and ordinary lag of the same order.
+        ValueError if the model contains any seasonal and ordinary AR or MA lag of the same order.
         '''
         # use construction to test for valueerror
-        # model = pmd.ARIMA(order=p_d_q_order, 
-        #                     seasonal_order=P_D_Q_order,
-        #                     maxiter=self.max_iter,
-        #                     trend='ct',
-        #                     enforce_stationarity=True,
-        #                     enforce_invertibility=True,
-        #                     measurement_error=False)
-        # model = SARIMAX(np.ones(100), order=p_d_q_order, seasonal_order=P_D_Q_order, trend='ct')
         repeat_lags = self._find_repeat_lags(p_d_q_order, P_D_Q_order)
         if len(repeat_lags) >0:
             raise ValueError('Repeat ordinary and seasonal lags of orders %s.' %repeat_lags)
@@ -148,92 +143,16 @@ class SARIMARegression():
         assert self._total_order == self._p_d_q_order[0] + self._p_d_q_order[2] + self._P_D_Q_order[0] + self._P_D_Q_order[2]
 
     @property
-    def p_d_q_order(self):
+    def p_d_q_order(self) -> tuple:
         '''Order of the model of the form (p,d,q)'''
         return tuple(self._p_d_q_order)
 
     @property
-    def P_D_Q_order(self):
+    def P_D_Q_order(self) -> tuple:
         '''Order of the model of the form (P,D,Q,m)'''
         return tuple(self._P_D_Q_order)
 
-
-    def _fit_model(self, endogeneous_data, exogeneous_data, p_d_q_order, P_D_Q_order):
-        '''
-        Fits the SARIMAX model to the data.
-
-        Keyword arguments:
-        endogeneous_data -- array-like, the regressor
-        exogeneous_data -- array-like, the regressand (Optional).  Length must be equal to the length of endogeneous_data.
-
-        Returns:
-        An ARIMA model fit object
-        '''
-        ar = SARIMAX(endog=endogeneous_data, exog=exogeneous_data, 
-                        order=p_d_q_order,
-                        seasonal_order=P_D_Q_order,
-                        trend='ct',
-                        measurement_error=False,
-                        enforce_stationarity=True,
-                        enforce_invertibility=True)
-        model_fit = ar.fit(cov_type='robust', maxiter=self.max_iter, full_output=False, disp=False)
-        return model_fit
-
-    def _sliding_window(self, endogeneous_data, exogeneous_data, p_d_q_order, P_D_Q_order, train_size : int):
-        '''
-        Conducts a sliding window forecast using the model.  
-        
-        For each possible block of consecutive time periods of size train_size,
-        uses the first n-1 of the n-sized block as training data and tests using the last observation.
-
-        Keyword arguments:
-        y -- the endogeneous data Series in float64 format with a PeriodIndex.  Requires len(y) >=1.
-        X - the exogeneous DataFrame in float64 format with a PeriodIndex (Optional).  If None, regression 
-            only including endogeneous data and lags is conducted.
-            Requires len(y) == len(X).
-        p_d_q_order -- the order of the model in (p,d,q) format.
-        P_D_Q_order -- the seasonal order of the model in (P,D,Q,m) format.
-        train_size -- the length of the training window.  Requires 1 <= train_size < len(y)
-            and train_size to be large enough that the model is not overspecified.
-            # TODO define these terms better
-
-        Returns:
-        A tuple of the form (yhats, actuals) of numpy arrays, each of length len(y) - train_size
-        containing no infs or nulls.  yhats[i] represents the prediction for the (len(y) - 1 - train_size + i)th 
-        element of y, and actual[i] = y[len(y) - 1 - train_size + i].
-
-        Raises:
-        # TODO does it raise valueError if lags of same order???
-        '''
-        n = len(endogeneous_data)
-
-        yhats = list()
-        actuals = list()
-
-        for train_start_index in range(n- train_size):
-            # Get data
-            endog_data = endogeneous_data.iloc[train_start_index : train_start_index + train_size]
-
-            # get next values for prediction
-            next_endog = endogeneous_data.iloc[train_start_index + train_size]
-
-            if exogeneous_data is not None:
-                exog_data = exogeneous_data.iloc[train_start_index: train_start_index + train_size, :]
-                next_exog = pd.DataFrame(exogeneous_data.iloc[train_start_index + train_size]).transpose()
-            else:
-                exog_data = None
-                next_exog = None
-            # run model
-            fit = self._fit_model(endog_data, exog_data, p_d_q_order, P_D_Q_order)
-            # returns as series, convert to float
-            yhat = fit.forecast(n_periods=1, exog=next_exog).iloc[0]
-
-            yhats.append(yhat)
-            actuals.append(next_endog)
-
-        return (yhats, actuals)
-
-    def _check_overspecified(self, y, X):
+    def _check_overspecified(self, y : pd.Series, X : pd.DataFrame) -> bool:
         '''
         Checks whether the model is overspecified.
 
@@ -257,7 +176,7 @@ class SARIMARegression():
 
         return False
 
-    def _find_repeat_lags(self, p_d_q_order, P_D_Q_order):
+    def _find_repeat_lags(self, p_d_q_order : tuple, P_D_Q_order : tuple) -> set:
         '''
         Finds repeat AR or MA lags in the ordinary or seasonal components.
 
@@ -281,7 +200,30 @@ class SARIMARegression():
 
         return duplicate_ar_lags.union(duplicate_ma_lags)
 
-    def fit(self, y : pd.Series, X) -> str:
+    def _fit_model(self, y : pd.Series, X : pd.DataFrame) -> mlemodel.MLEResults:
+        '''
+        Fits the SARIMAX model to the data.
+
+        Keyword arguments:
+        y --The regressor.  Requires len(y) > 1.
+        X -- The regressand (or None if no regressand).  If provided, requires len(y) == len(X)
+            and X must not be empty (no columns).
+
+        Returns:
+        An ARIMA model fit object.
+        '''
+        # TODO change to pmdarima
+        ar = SARIMAX(endog=y, exog=X, 
+                        order=self.p_d_q_order,
+                        seasonal_order=self.P_D_Q_order,
+                        trend='ct',
+                        measurement_error=False,
+                        enforce_stationarity=True,
+                        enforce_invertibility=True)
+        model_fit = ar.fit(cov_type='robust', maxiter=self.max_iter, full_output=False, disp=False)
+        return model_fit
+
+    def fit(self, y : pd.Series, X : pd.DataFrame) -> summary.Summary:
         '''
         Fits the model.
         
@@ -291,7 +233,7 @@ class SARIMARegression():
             If no exogeneous data, pass an empty DataFrame containing the required index.
 
         Returns:
-        A string summary of the results.
+        A summary of the results with a string representation.
 
         Raises:
         OverspecifiedError if the model is overspecified, that is, if the number of provided exogeneous variables
@@ -301,40 +243,55 @@ class SARIMARegression():
         assert len(y) == len(X), 'y and X must be of the same length'
         if self._check_overspecified(y, X):
             raise OverspecifiedError('Model is overspecified.  Remove exogeneous vars or reduce order')
-        # already covered by check overspecified
-        # assert len(y) >=1, 'Cannot fit a model to empty y (endogeneous data)'
 
-        # TODO temporary patch, this should be spec of underlying fit method
+        # _fit does not accept empty X
         if len(X.columns) == 0:
             X = None
         else:
             X = X
+
+        # length of y already greater than 1 since if it were equal to 1, 
+        # model would have failed overspecified test since trend order is 1
+        fit = self._fit_model(y, X)
         self._checkrep()
-        fit = self._fit_model(y, X, self._p_d_q_order, self._P_D_Q_order)
         return fit.summary()
 
-    def _predict(self, y, X, future_X, n):
-        '''Helper method for predict'''
-        fit = self._fit_model(y, X, self._p_d_q_order, self._P_D_Q_order)
+    def _predict(self, y : pd.Series, X : pd.DataFrame, future_X : pd.DataFrame, n : int) -> linear_model.PredictionResults:
+        '''
+        Fits the model for y on X and predicts n future observations for y.
 
+        Keyword arguments:
+        y --The regressor.  Requires len(y) > 1.
+        X -- The regressand (or None if no regressand).  Length must be equal to the length of endogeneous_data
+            and must not be empty (no columns).
+        future_X -- future exogeneous data observations or None if and only if X is None.  
+            Requires len(future_X) == n.
+        n -- The number of future periods to predict.  Requires n>0.
+
+        Returns: 
+        Results of the prediction.
+        '''
+        assert not ((X is None) ^ (future_X is None)), 'X and future_X must be both provided or niether provided'
+        fit = self._fit_model(y, X)
 
         return fit.forecast(n, exog=future_X)
 
 
-    def predict(self, n, y, X, future_X=None) -> pd.Series:
+    def predict(self, n : int, y : pd.Series, X : pd.DataFrame, future_X : pd.DataFrame=None) -> pd.Series:
         '''
         Predicts n future values of y using future values of X, future_X.  
         Uses a model fit for y on X and then predicts using that model.
 
         Keyword arguments:
-        n -- int, the number of future periods to predict.  Requires n>=0.
+        n -- the number of future periods to predict.  Requires n>=0.
         y -- the endogeneous data Series in float64 format with a PeriodIndex.
         X - the exogeneous DataFrame in float64 format with a PeriodIndex.  Requires len(y) == len(X)
             If no exogeneous data, pass an empty DataFrame containing the required index.
-        future_X -- Dataframe containing the future values of the exogeneous variables X in float64 format. (Optional)
+        future_X -- Dataframe containing the future values of the exogeneous variables X in float64 format,
+            or None if X has no columns (X is an empty dataframe).
             Requires the same set of columns in the same order as X, and with a PeriodIndex matching in 
             frequency and containing subsequent consecutive periods to the last periods in X, with no gaps.
-            Required if X is provided, and must be of length >=n.
+            If given, must be of length >=n.
 
         Returns:
         A Pandas Series indexed by PeriodIndex in float64 format containing n future predictions for y.
@@ -345,47 +302,100 @@ class SARIMARegression():
             of exogeneous variables.
         ValueError if n is larger than the number of X observations provided.
         '''
+        # TODO should we change spec to require provision of future_X?  
+        # - more SFB - we can check that length = n
+        # - more SFB - we can use this index as same for return value
+        # - fail fast - catch error if n wrong when getting data, not when plugging in here
+        assert n >= 0, 'Number of periods to predict must be >=0'
+
         if self._check_overspecified(y, X):
             raise OverspecifiedError('Model is overspecified.  Remove exogeneous vars or reduce order')
-        # TODO reinstate
-        # assert not (X is None ^ future_X is None), 'X and future_X must either be both provided or both None' 
 
-        # TODO temporary patch, this should be spec of underlying fit method
         if len(X.columns) == 0:
             X = None
-        else:
+        else: # X provided so future_X must be also
             X = X
+            if n > len(future_X):
+                raise ValueError('Not enough future exogeneous data provided for horizon %s prediction' %n)
+            future_X = future_X.iloc[:n]
         start_date = y.index.max() + y.index.freq
         index = pd.period_range(start=start_date, periods=n, freq=y.index.freq)
-        future_X = None if future_X is None else future_X.iloc[:n]
+        # future_X = None if future_X is None else future_X.iloc[:n]
         if n >0:
             return pd.Series(data=self._predict(y,X,future_X,n),
                                 index=index,
                                 name='Predictions',
                                 dtype='float64')
-        else:
+        else: # predict can't handle if n=0, return empty frame
             return pd.Series(
                                 index=pd.PeriodIndex(data=np.array([]), freq=y.index.freq),
                                 name='Predictions',
                                 dtype='float64'
             )
 
-    def sliding_window_forecast(self, y : pd.Series, X, window_size=0.8) -> pd.DataFrame:
+    def _sliding_window(self, y : pd.Series, X : pd.DataFrame, train_size : int) -> tuple:
         '''
         Conducts a sliding window forecast using the model.  
         
-        For each possible block of consecutive time periods of size approximately window_size * len(y), 
+        For each possible block of consecutive time periods of size train_size,
         uses the first n-1 of the n-sized block as training data and tests using the last observation.
 
         Keyword arguments:
         y -- the endogeneous data Series in float64 format with a PeriodIndex.
-        X - the exogeneous DataFrame in float64 format with a PeriodIndex (Optional).  If None, regression only including endogeneous 
-            data and lags is conducted.
-            Requires len(y) == len(X).
-        window_size -- the fraction of the total data to use for the training window.
-                        Uses ceil(window_size*len(y)) of the data to train.
-                        Requires 0 < window_size <= 1
-                        Default 0.8.
+        X - the exogeneous DataFrame in float64 format with a PeriodIndex (Optional).  Requires len(y) == len(X)
+        train_size -- the length of the training window.  Requires 1 <= train_size <= len(y)
+            and train_size to be large enough that the model is not overspecified.
+
+        Returns:
+        A tuple of the form (yhats, actuals) of numpy arrays, each of length len(y) - train_size
+        containing no infs or nulls.  yhats[i] represents the prediction for the (len(y) - 1 - train_size + i)th 
+        element of y, and actual[i] = y[len(y) - 1 - train_size + i].
+        '''
+        n = len(y)
+
+        yhats = list()
+        actuals = list()
+
+        for train_start_index in range(n- train_size):
+            # Get data
+            endog_data = y.iloc[train_start_index : train_start_index + train_size]
+
+            # get next values for prediction
+            next_endog = y.iloc[train_start_index + train_size]
+
+            if X is not None:
+                exog_data = X.iloc[train_start_index: train_start_index + train_size, :]
+                next_exog = pd.DataFrame(X.iloc[train_start_index + train_size]).transpose()
+            else:
+                exog_data = None
+                next_exog = None
+            # run model
+            fit = self._fit_model(endog_data, exog_data)
+            # returns as series, convert to float
+            yhat = fit.forecast(n_periods=1, exog=next_exog).iloc[0]
+
+            yhats.append(yhat)
+            actuals.append(next_endog)
+
+        return (yhats, actuals)
+
+    def sliding_window_forecast(self, y : pd.Series, X : pd.DataFrame, window_size) -> pd.DataFrame:
+        '''
+        Conducts a sliding window forecast using the model.  
+        
+        For each possible block of consecutive time periods of size approximately window_size * len(y), 
+        uses the first n of the (n+1)-sized block as training data and tests using the last observation.
+
+        Keyword arguments:
+        y -- the endogeneous data Series in float64 format with a PeriodIndex.
+        X - the exogeneous DataFrame in float64 format with a PeriodIndex.  Requires len(y) == len(X)
+            If no exogeneous data, pass an empty DataFrame containing the required index.
+        window_size -- the size of the training window. 
+            If <=1, corresponds to the fraction of the data to use for training.  
+            Uses max(ceil(window_size * len(y)), 1) observations of y for each window and
+            requires 0 < window_size <=1
+            If >1, uses int(window_size) observations of y for the training window and requires 
+            window_size <= len(y).
 
         Returns:
         A Pandas DataFrame indexed by period of size approximately (1-window_size) * len(y) of two columns, 'predictions',
@@ -393,12 +403,18 @@ class SARIMARegression():
         the actual y values for those periods.
 
         Raises:
-        OverspecifiedError if window_size results in a window size that is overspecified in the current model.
+        OverspecifiedError if window_size results in a window size that in training is overspecified in the current model.
         '''
         # assert precondition - fail fast
-        assert 0 < window_size <= 1
-        # TODO update underlying method
-        window_len = max(math.ceil(window_size * len(y)), 1)
+        assert window_size >0, 'Window size must be >=0'
+        assert window_size <= len(y), 'Window size cannot exceed the number of observations'
+
+        # split window size based on value
+        if window_size <= 1:
+            window_len = max(math.ceil(window_size * len(y)), 1)
+        else:
+            window_len = int(window_size)
+
         if len(X.columns) == 0:
             X = None
             X_check = None
@@ -410,7 +426,7 @@ class SARIMARegression():
 
         n_predictions = len(y) - window_len
 
-        yhats, actuals = self._sliding_window(y, X, self._p_d_q_order, self._P_D_Q_order, window_len)
+        yhats, actuals = self._sliding_window(y, X, window_len)
 
         self._checkrep()
         idx = y.index[len(y)-n_predictions:]
@@ -426,7 +442,7 @@ class AutoARIMARegression(SARIMARegression):
     If provided, d and D are taken as given and not altered for any fit of the model.
     
     The model provides various methods to invoke on endogeneous and exogeneous data, 
-    but the underlying model automatic ARIMA regression model remains the same.
+    but the underlying starting parameters for the automatic ARIMA regression model remains the same.
 
     Attributes:
     p_d_q_order: the order of the model in the form (p,d,q)
@@ -497,38 +513,69 @@ class AutoARIMARegression(SARIMARegression):
         # total order = 0
         assert self._total_order == 0
 
-    def _fit_model(self, endogeneous_data, exogeneous_data, p_d_q_order, P_D_Q_order):
+    def _fit_model(self, y : pd.Series, X : pd.DataFrame):
         '''
-        Fits the auto ARIMA model to the data.
+        Fits the SARIMAX model to the data.
 
         Keyword arguments:
-        endogeneous_data -- array-like, the regressor
-        exogeneous_data -- array-like, the regressand.  Length must be equal to the length of endogeneous_data
+        y --The regressor.  Requires len(y) > 1.
+        X -- The regressand (or None if no regressand).  If provided, requires len(y) == len(X)
+            and X must not be empty (no columns).
 
         Returns:
-        An ARIMA model fit object
+        An ARIMA model fit object.
         '''
-        p, d, q = p_d_q_order
-        P, D, Q, m = P_D_Q_order
+        p, d, q = self.p_d_q_order
+        P, D, Q, m = self.P_D_Q_order
 
-        model_fit = auto_arima(endogeneous_data, exogeneous_data, start_p=p, d=d, start_q=q, start_P=P, D=D, start_Q=Q, m=m, trend='t', maxiter=self.max_iter, sarimax_kwargs={'enforce_stationarity':True, 'enforce_invertibility':True}, **{'cov_type':'robust', 'gls':False})
+        model_fit = auto_arima(y, X, start_p=p, d=d, start_q=q, start_P=P, D=D, start_Q=Q, m=m, trend='t', maxiter=self.max_iter, sarimax_kwargs={'enforce_stationarity':True, 'enforce_invertibility':True}, **{'cov_type':'robust', 'gls':False})
 
         return model_fit
 
-    def _predict(self, y, X, future_X, n):
-        fit = self._fit_model(y, X, self.p_d_q_order, self.P_D_Q_order)
+    def _predict(self, y : pd.Series, X : pd.DataFrame, future_X : pd.DataFrame, n : int):
+        '''
+        Fits the model for y on X and predicts n future observations for y.
+
+        Keyword arguments:
+        y --The regressor.  Requires len(y) > 1.
+        X -- The regressand (or None if no regressand).  Length must be equal to the length of endogeneous_data
+            and must not be empty (no columns).
+        future_X -- future exogeneous data observations or None if and only if X is None.  
+            Requires len(future_X) == n.
+        n -- The number of future periods to predict.  Requires n>0.
+
+        Returns: 
+        Results of the prediction.
+        '''
+        fit = self._fit_model(y, X)
 
         return fit.predict(n_periods=n, X=future_X)
 
-    def _sliding_window(self, endogeneous_data, exogeneous_data, p_d_q_order, P_D_Q_order, window_size):
-        '''Rolling window auto arima forecast'''
-        if window_size == len(endogeneous_data):
+    def _sliding_window(self, y : pd.Series, X : pd.DataFrame, train_size : int):
+        '''
+        Conducts a sliding window forecast using the model.  
+        
+        For each possible block of consecutive time periods of size train_size,
+        uses the first n-1 of the n-sized block as training data and tests using the last observation.
+
+        Keyword arguments:
+        y -- the endogeneous data Series in float64 format with a PeriodIndex.
+        X - the exogeneous DataFrame in float64 format with a PeriodIndex (Optional).  Requires len(y) == len(X)
+        train_size -- the length of the training window.  Requires 1 <= train_size <= len(y)
+            and train_size to be large enough that the model is not overspecified.
+
+        Returns:
+        A tuple of the form (yhats, actuals) of numpy arrays, each of length len(y) - train_size
+        containing no infs or nulls.  yhats[i] represents the prediction for the (len(y) - 1 - train_size + i)th 
+        element of y, and actual[i] = y[len(y) - 1 - train_size + i].
+        '''
+        if train_size == len(y):
             return (np.array([]), np.array([]))
         else:
-            y = endogeneous_data
-            x = exogeneous_data
-            cv = model_selection.SlidingWindowForecastCV(h=1, window_size=window_size)
-            fit = self._fit_model(y, x, p_d_q_order, P_D_Q_order)
+            y = y
+            x = X
+            cv = model_selection.SlidingWindowForecastCV(h=1, window_size=train_size)
+            fit = self._fit_model(y, x)
             yhats = model_selection.cross_val_predict(fit, y, x, cv=cv)
             actuals = y.iloc[-len(yhats):].to_numpy()
 
@@ -565,7 +612,7 @@ class BruteForceARIMARegression(SARIMARegression):
     
     fraction_training_data = 0.8
 
-    def __init__(self, y, X, order_arg_ranges):
+    def __init__(self, y : pd.Series, X : pd.DataFrame, order_arg_ranges : tuple):
         '''
         Initializes a new class instance.
 
@@ -597,13 +644,14 @@ class BruteForceARIMARegression(SARIMARegression):
         # TODO maybe call rolling_window which calculates window size automatically
         training_window_size = min(max(math.ceil(self.fraction_training_data * n), 1), len(y)-1)
         order = self.determine_opt_order(y, X, training_window_size, order_arg_ranges)
+        print(order)
         self._p_d_q_order = tuple(order[0:3])
         self._P_D_Q_order = tuple(order[3:])
 
         self._total_order = self._p_d_q_order[0] + self._p_d_q_order[2] + self.P_D_Q_order[0] + self._P_D_Q_order[2]
         self._checkrep()
 
-    def determine_opt_order(self, y, X, training_window_size, order_arg_ranges):
+    def determine_opt_order(self, y : pd.Series, X : pd.DataFrame, training_window_size : int, order_arg_ranges : tuple):
         '''
         Determines the optimal order for the SARIMA model y on X.
 
@@ -645,25 +693,28 @@ class BruteForceARIMARegression(SARIMARegression):
             raise OverspecifiedError('Model is overspecified for every combination of order args given by order_arg_ranges.  Remove exogeneous vars or reduce order')
         min_rmse = float('inf')
         best_order_arg = None
-        if X.shape[1] == 0:
-            X = None
         for order_arg in range_combo_generator(order_arg_ranges):
             p_d_q_order = tuple(order_arg[0:3]) # p,d,q
             P_D_Q_order = tuple(order_arg[3:]) # P, D, Q, m
-            # if it's a valid model, try
-            if not len(self._find_repeat_lags(p_d_q_order, P_D_Q_order)) >0:
-                try:
-                    yhats, actuals = self._sliding_window(y, X, p_d_q_order, P_D_Q_order, training_window_size)
-                    rmse = calc_rmse(yhats, actuals)
-                except OverspecifiedError:
-                    rmse = float('inf')
-                if rmse < min_rmse:
-                    min_rmse = rmse
-                    best_order_arg = order_arg
+            # try creating model.  If raises ValueError, then invalid model
+            # try:
+            model = SARIMARegression(p_d_q_order, P_D_Q_order)
+            # try:
+            sliding_window_results = model.sliding_window_forecast(y, X, training_window_size)
+            rmse = sliding_window_rmse(sliding_window_results)
+                # except OverspecifiedError:
+                #     rmse = float('inf')
+            # except ValueError:
+            #     rmse = float('inf')
+            if rmse < min_rmse:
+                min_rmse = rmse
+                best_order_arg = order_arg
 
-        # if best_order_arg is None:
-        #     raise ValueError('All models allowed by order_args contain seasonal and ordinary lags of the same order.')
-        return best_order_arg
+
+        if best_order_arg is None:
+            raise ValueError('All models allowed by order_args contain seasonal and ordinary lags of the same order.')
+        else:
+            return best_order_arg
 
         
 

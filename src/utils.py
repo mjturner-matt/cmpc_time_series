@@ -58,3 +58,15 @@ def plot_dataframe(dataframe, filename):
 def to_excel(dataframe, filename):
     '''Saves the dataframe to an excel file with name filename'''
     dataframe.to_excel(filename)
+
+def sliding_window_rmse(sliding_window_results : pd.DataFrame) -> float:
+    '''
+    Calculates the RMSE for sliding window results.
+
+    Keyword arguments:
+    sliding_window_results: the results dataframe of sliding_window_forecast
+
+    Returns:
+    The rmse of the results.
+    '''
+    return calc_rmse(sliding_window_results['predictions'], sliding_window_results['actuals'])

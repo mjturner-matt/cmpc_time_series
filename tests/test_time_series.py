@@ -34,11 +34,12 @@ class TestRegression(TestUtils):
     #   len y: 1, 2, >2
     #   # exogeneous vars: 0, 1, >1
     #   len future X: 0, 1, >1, None
-    #   Raises: ValueError, None
+    #   ValueError: Raises, None
+    #   OverspecifiedError: Raises, None
     # Partition on sliding_window_forecast:
     #   len y: 1, 2, >2
     #   # exogeneous vars: 0, 1, >1
-    #   window_size = close to 0, 0 < window_size <1, 1
+    #   window_size = close to 0, 0 < window_size <1, 1, >1
     #   OverspecifiedError: Raises, None
 
     def check_predictions(self, y, yhats):
@@ -102,7 +103,7 @@ class TestRegression(TestUtils):
     # Partition on predict:
     #   n>1, len y=2, # exog vars = 0, len future_X = None, ValueError = None, OverspecifiedError = None
     # Partition on sliding_window_forecast:
-    #   len y = 2, # exog vars = 0, window_size = close to 0, OverspecifiedError = None
+    #   len y = 2, # exog vars = 0, window_size = close to 0 and 2, OverspecifiedError = None
     def test_no_regressors(self):
         idx = pd.PeriodIndex(freq='Q', year=[2009, 2009], quarter=[1,2])
         y = pd.Series(np.array([1.0, 2.0]),
@@ -131,6 +132,10 @@ class TestRegression(TestUtils):
         with self.assertRaises(OverspecifiedError):
             model.sliding_window_forecast(y, X, window_size=0.001)
 
+        sliding_window_results = model.sliding_window_forecast(y, X, window_size=2)
+        self.check_sliding_forecast(y, sliding_window_results)
+        self.assertEqual(0, len(sliding_window_results))
+
     # Covers:
     # Partition on __init__:
     #   p=1, d=0, q=0, P=1, D=0, Q=0, m=2, ValueError = None
@@ -139,7 +144,7 @@ class TestRegression(TestUtils):
     # Partition on predict:
     #   n=1, len y >2, # exog vars = 1, len future_X >1, ValueError = None, OverspecifiedError = None
     # Partition on sldiding_window_forecast:
-    #   len y >2, # exog vars = 1, window_size = 1, OverspecifiedError = None
+    #   len y >2, # exog vars = 1, window_size = 1 and >2, OverspecifiedError = None
     def test_one_exogeneous_var(self):
         n_obs=7
         n_future_obs=5
@@ -168,7 +173,13 @@ class TestRegression(TestUtils):
         self.assertEqual((n,), yhat.shape)
         self.check_predictions(y, yhat)
 
-        self.check_sliding_forecast(y, model.sliding_window_forecast(y, X, 1.0))
+        sliding_window_fraction = model.sliding_window_forecast(y, X, 1.0)
+        self.check_sliding_forecast(y, sliding_window_fraction)
+        self.assertEqual(0, len(sliding_window_fraction))
+
+        sliding_window_size = model.sliding_window_forecast(y, X, n_obs)
+        self.check_sliding_forecast(y, sliding_window_size)
+        self.assertEqual(0, len(sliding_window_size))
 
     # Covers:
     # Partition on __init__:
@@ -178,8 +189,9 @@ class TestRegression(TestUtils):
     # Partition on predict:
     #   n=1, len y >2, # exog vars >1, len future_X = 1, ValueError = None, OverspecifiedError = Raises
     # Partition on sliding_window_forecast:
-    #   len y > 2, # exog vars >1, window_size = 0 < window_size < 1, OverspecifiedError = raises
+    #   len y > 2, # exog vars >1, window_size = 0 < window_size < 1 and >2, OverspecifiedError = raises
     def test_overspecified(self):
+        # TODO refactor as test_overspecified_model_total_order
         n_obs = self.test_overspecified_n_obs
         n_future_obs = 1
         idx = pd.period_range(start=pd.Period(year=1999, freq='Y'), periods=n_obs+n_future_obs, freq='Y')
@@ -209,14 +221,17 @@ class TestRegression(TestUtils):
 
         with self.assertRaises(OverspecifiedError):
             model.sliding_window_forecast(y, X, 0.5)
+        
+        with self.assertRaises(OverspecifiedError):
+            model.sliding_window_forecast(y, X, n_obs)
 
     # Covers:
     # Partition on __init__:
     #   p=0, d=0, q=0, P=0, D=0, Q=0, m=12, ValueError = None
     # Partition on predict:
-    #   n=0, len y > 2, # exog vars = 1, len future_X = 0
+    #   n=0, len y > 2, # exog vars = 1, len future_X = 0, ValueError = Raises, OverspecifiedError = None
     # Partition on sliding_window_forecast:
-    #   len y >2, # exog vars = 1, widnow_size = 0 < window_size <1, OverspecifiedError = None
+    #   len y >2, # exog vars = 1, widnow_size = 0 < window_size <1 and >2, OverspecifiedError = None
     def test_empty_prediction(self):
         n_obs = 3
         n_future_obs = 0
@@ -245,7 +260,10 @@ class TestRegression(TestUtils):
         with self.assertRaises(ValueError):
             model.predict(n,y,X,future_X)
 
-        self.check_sliding_forecast(y, model.sliding_window_forecast(y, X))
+        self.check_sliding_forecast(y, model.sliding_window_forecast(y, X, 0.8))
+        sliding_size = model.sliding_window_forecast(y, X, n_obs)
+        self.check_sliding_forecast(y, sliding_size)
+        self.assertEqual(0, len(sliding_size))
 
     # Glass box testing
 
@@ -273,6 +291,9 @@ class TestRegression(TestUtils):
 
         with self.assertRaises(OverspecifiedError):
             model.predict(1, y, X)
+
+        with self.assertRaises(OverspecifiedError):
+            model.sliding_window_forecast(y, X, 1)
 
     # Test cases resulting from bugs
     def test_no_exog_sliding_window(self):
@@ -343,7 +364,7 @@ class TestSARIMARegression(unittest.TestCase, TestRegression):
 
         model = self.create_model(y,X,p_d_q_order, P_D_Q_order)
 
-        yhats, actuals = model._sliding_window(y, None, p_d_q_order, P_D_Q_order, 2)
+        yhats, actuals = model._sliding_window(y, None, 2)
         self.assertEqual(1, len(yhats))
         self.assertEqual(1, len(actuals))
 
@@ -476,6 +497,7 @@ class TestBruteForceARIMARegression(unittest.TestCase, TestRegression):
         X = pd.DataFrame(
                         index=idx,
                         dtype='float64')
+        # total order = 0 + 1 + 0 = 1
         p_start, d_start, q_start = (0,0,0)
         P_start, D_start, Q_start, m_start = (0,0,0,2)
         p,d,q = (1,1,1)
@@ -540,7 +562,7 @@ class TestBruteForceARIMARegression(unittest.TestCase, TestRegression):
     #   m start = 2, m end = 3, m interval len = 1
     #   OverspecifiedError = None, ValueError = None
     def test_all_order_args_repeat_lags(self):
-        n_obs = 6
+        n_obs = 7
         idx = pd.period_range(start=pd.Period(year=2003, month=2, freq='M'), periods=n_obs, freq='M')
         y = pd.Series(data=np.random.rand(n_obs),
                         index=idx,
@@ -548,12 +570,12 @@ class TestBruteForceARIMARegression(unittest.TestCase, TestRegression):
         X = pd.DataFrame(np.random.rand(n_obs,1),
                         index=idx,
                         dtype='float64')
-        # min total order = 1 + 1 + 1 + 1 = 4
+        # min total order = 2 + 1 + 1 + 1 = 5
         # 5 total obs needed to fit, 6 to compare rmse
-        p_start, d_start, q_start = (1,0,0)
-        P_start, D_start, Q_start, m_start = (1,0,0,0)
-        p,d,q = (2,1,1)
-        P,D,Q,m = (2,1,1,1)
+        p_start, d_start, q_start = (2,0,0)
+        P_start, D_start, Q_start, m_start = (1,0,0,2)
+        p,d,q = (3,1,1)
+        P,D,Q,m = (2,1,1,3)
         order_arg_ranges = (range(p_start, p),
                             range(d_start, d),
                             range(q_start, q),
