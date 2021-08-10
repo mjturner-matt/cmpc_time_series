@@ -187,9 +187,6 @@ class ExogeneousDataImporter:
             be forward filled.
         - Exogeneous variables with no corresponding data (all nulls) will be dropped.
         Data will be sorted in ascending order by date.
-
-        Raises:
-        OSError if the filepath does not exist.
         '''
         if format == ExogeneousDataFormats.macro:
             func = import_macro
