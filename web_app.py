@@ -26,7 +26,7 @@ def get_table_download_link(dataframe : pd.DataFrame, filename : str) -> str:
 # Get data
 
 @st.cache
-def get_ts_data(endog_file, endog_format, exog_file, exog_format, endog_name):
+def get_ts_data(endog_file, endog_format : import_data.EndogeneousDataFormats, exog_file, exog_format : import_data.ExogeneousDataFormats, endog_name : str) -> data.TimeSeriesData:
     '''Gets the PCA with percentage, or no PCA if None'''
     # endog_file = 'data/sample_tabular.xlsx'
     # exog_file = 'data/data.xlsx'
@@ -41,12 +41,12 @@ def get_ts_data(endog_file, endog_format, exog_file, exog_format, endog_name):
     return data.TimeSeriesData(exog, endog, endog_name)
 
 @st.cache
-def get_ts_data_after_downsample(ts_data, exogeneous_vars):
+def get_ts_data_after_downsample(ts_data : data.TimeSeriesData, exogeneous_vars : list) -> data.TimeSeriesData:
     '''Select exogeneous vars from ts_data'''
     return ts_data.downsample(exogeneous_vars)
 
 @st.cache
-def get_ts_data_after_PCA(ts_data, pca, pca_percentage):
+def get_ts_data_after_PCA(ts_data : data.TimeSeriesData, pca : bool, pca_percentage : float) -> data.TimeSeriesData:
     '''Takes a PCA of ts_data according to pca_percentage'''
     if pca:
         return ts_data.PCA(pca_percentage)

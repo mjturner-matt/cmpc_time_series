@@ -12,7 +12,7 @@ pd.set_option("display.max_rows", 999)
 Utilities for src.
 '''
 
-def range_combo_generator(ranges):
+def range_combo_generator(ranges : tuple) -> tuple:
     '''
     Generates all combinations of integers within each range in ranges.
 
@@ -23,7 +23,7 @@ def range_combo_generator(ranges):
     A tuple of len(ranges) containing the next combination of integers,
         where the ith element of the tuple is within the ith range of ranges.
     '''
-    def range_combo_helper(i, ranges):
+    def range_combo_helper(i : int, ranges : tuple) -> tuple:
         '''
         Helper method that yields all combinations of integers from the range objects
         located in ranges[i:].
@@ -45,17 +45,17 @@ def range_combo_generator(ranges):
                 yield from range_combo_helper(i+1, ranges[0:i] + (j,) + ranges[i+1:])
     yield from range_combo_helper(0, ranges)
 
-def calc_rmse(yhats, actuals):
+def calc_rmse(yhats : pd.Series, actuals : pd.Series) -> float:
     '''Calculates the rmse between yhats and actuals'''
     return sqrt(mean_squared_error(actuals, yhats))
 
-def plot_dataframe(dataframe, filename):
+def plot_dataframe(dataframe : pd.DataFrame, filename : str):
     '''Plots a line plot of the dataframe columns and saves to filename'''
     dataframe.plot()
     # plt.show()
     plt.savefig(filename)
 
-def to_excel(dataframe, filename):
+def to_excel(dataframe : pd.DataFrame, filename : str):
     '''Saves the dataframe to an excel file with name filename'''
     dataframe.to_excel(filename)
 

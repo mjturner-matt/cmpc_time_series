@@ -32,7 +32,7 @@ class ExogeneousDataFormats(Enum):
 class EndogeneousDataImporter:
     '''Import endogeneous data'''
 
-    def import_endogeneous(file : str, endogeneous_var : str, format : EndogeneousDataFormats) -> pd.Series:
+    def import_endogeneous(file, endogeneous_var : str, format : EndogeneousDataFormats) -> pd.Series:
         '''
         Factory method for importing time indexed endogeneous data.
 
@@ -57,7 +57,7 @@ class EndogeneousDataImporter:
         EndogeneousDataImporter._check_import(data)
         return data
 
-    def _check_import(data):
+    def _check_import(data : pd.Series):
         '''Asserts the postcondition of import_endogeneous.'''
         # if shape is len 1, 1-dimensional array, only 1 col
         assert len(data.shape) == 1
@@ -74,13 +74,13 @@ class EndogeneousDataImporter:
             # example: quarter 1-quarter 0 =1, although we have 2 quarters
             assert len(data.index) == time_delta.n +1
 
-def import_excel_table(filename : str, endogeneous_var : str) -> pd.Series:
+def import_excel_table(file, endogeneous_var : str) -> pd.Series:
     '''
     Converts an excel table to a DataFrame.  
     See spec for EndogeneousDataImporter.import_endogeneous()
     '''
     # import macro vars
-    endog_db = pd.read_excel(filename, parse_dates=False)
+    endog_db = pd.read_excel(file, parse_dates=False)
     # endog_db = endog_db.rename(columns = {"Unnamed: 0": "Year"})
     # print(endog_db)
     # Melt defaults to using all columns for unpivot
@@ -127,7 +127,7 @@ def parse_quarter_to_period(quarter : str) -> pd.Period:
     return pd.Period(freq = 'Q', quarter=quarter_num, year=four_digit_year)
 
 
-def import_cmpc_financial_data(filename : str, endogeneous_var) -> pd.Series:
+def import_cmpc_financial_data(file, endogeneous_var : str) -> pd.Series:
     '''
     Converts a csv CMPC Financial Data dataset to a DataFrame.  Designed to work with csv files created
     from the XLSX format available here:
@@ -139,7 +139,7 @@ def import_cmpc_financial_data(filename : str, endogeneous_var) -> pd.Series:
     '''
     assert endogeneous_var != ''
 
-    financial_statement_db = pd.read_csv(filename, 
+    financial_statement_db = pd.read_csv(file, 
                                     parse_dates=True, 
                                     na_values=['', '-', ' '], # endogeneous can't be '' due to treatment as null
                                     skip_blank_lines=True) # many blank rows in CMPC download
@@ -170,7 +170,7 @@ def import_cmpc_financial_data(filename : str, endogeneous_var) -> pd.Series:
 class ExogeneousDataImporter:
     '''Import exogeneous data'''
 
-    def import_exogeneous(file : str, format : ExogeneousDataFormats) -> pd.DataFrame:
+    def import_exogeneous(file, format : ExogeneousDataFormats) -> pd.DataFrame:
         '''
         Factory method to import time indexed exogeneous data.
 
@@ -200,19 +200,19 @@ class ExogeneousDataImporter:
         ExogeneousDataImporter._check_import(data)
         return data
 
-    def _check_import(data):
+    def _check_import(data : pd.DataFrame):
         '''Asserts the postcondition on import_exogeneous.'''
         # assert no null values after bfill and ffill
         assert not np.any(data.isnull())
 
 
-def import_macro(filename : str) -> pd.DataFrame:
+def import_macro(file) -> pd.DataFrame:
     '''
     Converts an XLSX macroeconomic dataset to a DataFrame.  
     See spec for factory method ExogeneousDataImporter.import_exogeneous()
     '''
     # import vars
-    exog_db = pd.read_excel(filename, sheet_name="BBG P", skiprows=[0,1,2,4,5], index_col = 0, parse_dates=True)
+    exog_db = pd.read_excel(file, sheet_name="BBG P", skiprows=[0,1,2,4,5], index_col = 0, parse_dates=True)
     # change empty string col name back to empty string
     exog_db = exog_db.rename(columns = {"Unnamed: 1": ""})
     # should only have one empty string col name, so if there exists unnamed 1 precondition of unique columns not met

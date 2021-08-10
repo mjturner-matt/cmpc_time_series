@@ -1,3 +1,5 @@
+# support for type hints for self/producer methods like PCA
+from __future__ import annotations
 # import argparse
 # from ast import parse
 # from os import P_ALL, error, path
@@ -92,7 +94,7 @@ class TimeSeriesData():
     #     since underlying data is still protected by the safety from rep exposure of this class
 
     # Constructors
-    def __init__(self, exogeneous_data, endogeneous_data, endogeneous_var):
+    def __init__(self, exogeneous_data : pd.DataFrame, endogeneous_data : pd.Series, endogeneous_var : str):
         '''
         Instantiates a TimeSeriesData object.
 
@@ -137,7 +139,7 @@ class TimeSeriesData():
         self._checkrep()
 
     @classmethod
-    def _from_db(cls, db, future_db, endogeneous_var):
+    def _from_db(cls, db : pd.DataFrame, future_db : pd.DataFrame, endogeneous_var : str) -> TimeSeriesData:
         '''
         Internal method to instantiate a new instance of the class from an 
         existing internal representation.
@@ -316,28 +318,28 @@ class TimeSeriesData():
         # TODO fix wrong time periods on axes
         return pdplot.autocorrelation_plot(self._db.loc[:,self.endogeneous_var])
     
-    def get_exogeneous_data(self, vars=None) -> pd.DataFrame:
-        '''
-        Getter method for exogeneous data.
+    # def get_exogeneous_data(self, vars=None) -> pd.DataFrame:
+    #     '''
+    #     Getter method for exogeneous data.
 
-        If no exogeneous variables, returns a DataFrame with the time series index
-            but no columns.
+    #     If no exogeneous variables, returns a DataFrame with the time series index
+    #         but no columns.
 
-        Keyword arguments:
-        vars (optional) -- An iterable subset of exogeneous variables to return.  Default None, which returns all exogeneous columns.
+    #     Keyword arguments:
+    #     vars (optional) -- An iterable subset of exogeneous variables to return.  Default None, which returns all exogeneous columns.
         
-        Raises:
-        KeyError if any of cols is not an exogeneous var.
-        '''
-        # can't get endog data from this function
-        # raise DeprecationWarning('get_exogeneous_data will be eliminated in a future version.  Use exogeneous_data instead.')
-        return_cols = vars if vars else self._exogeneous_vars
-        if self.endogeneous_var in return_cols:
-            raise KeyError('endogeneous_var is not exogeneous')
+    #     Raises:
+    #     KeyError if any of cols is not an exogeneous var.
+    #     '''
+    #     # can't get endog data from this function
+    #     # raise DeprecationWarning('get_exogeneous_data will be eliminated in a future version.  Use exogeneous_data instead.')
+    #     return_cols = vars if vars else self._exogeneous_vars
+    #     if self.endogeneous_var in return_cols:
+    #         raise KeyError('endogeneous_var is not exogeneous')
 
-        return self._db.loc[:, return_cols].copy()
+    #     return self._db.loc[:, return_cols].copy()
 
-    def get_future_exogeneous(self, horizon=None, vars=None):
+    def get_future_exogeneous(self, horizon : int=None, vars : int=None) -> pd.DataFrame:
         '''
         Getter method for future exogeneous data, 
         that is, exogeneous data whose corresponding endogenous data value
@@ -365,7 +367,7 @@ class TimeSeriesData():
         else:
             return self._future_db.loc[:, return_cols].copy()
 
-    def _fit_pca(self, explained_variance):
+    def _fit_pca(self, explained_variance : float) -> PCA:
         '''
         Helper method to fit the exogeneous data to a principal components analysis (PCA).
         Fits a PCA to the data using the minimum number of variables required to explain
@@ -400,7 +402,7 @@ class TimeSeriesData():
 
         return pca
 
-    def get_PCA_covariance_matrix(self, explained_variance=0.9):
+    def get_PCA_covariance_matrix(self, explained_variance : float=0.9) -> pd.DataFrame:
         '''
         Gets a covariance matrix for a data transformation.  
 
@@ -448,11 +450,9 @@ class TimeSeriesData():
         else:
             return pd.DataFrame(dtype='float64')
 
-    # TODO get should be properties
-
     # Producers
 
-    def downsample(self, exogeneous_vars):
+    def downsample(self, exogeneous_vars : list) -> TimeSeriesData:
         '''
         Downsample the exogeneous variables included in the dataset to those in exogeneous_vars.
 
@@ -475,7 +475,7 @@ class TimeSeriesData():
                 raise KeyError('Exogeneous var ' + str(col) + 'not found in data')
         return self._from_db(self._db.reindex(columns=cols), self._future_db.reindex(columns=exogeneous_vars), self.endogeneous_var)
 
-    def PCA(self, explained_variance = 0.9):
+    def PCA(self, explained_variance : float=0.9) -> TimeSeriesData:
         '''
         Transforms the exogeneous data using PCA.
 
@@ -487,7 +487,7 @@ class TimeSeriesData():
                 number of exogeneous variables.
 
         Returns: 
-        A CMPCFinancialData object containing the transformed data.
+        A new time series dataset ontaining the transformed data.
         The transformed columns are the lowest number of principal compnents that explain at least explained_variance
         of the data.  Column labels are based on the original variable that is most correlated with that
         principal component.
@@ -529,7 +529,7 @@ class TimeSeriesData():
             # Ok to return self since immutable
             return self
 
-    def ADF_test(self):
+    def ADF_test(self) -> int:
         '''
         Performs an ADF test on whether the endogeneous variable of the time series is stationary.
 
@@ -538,7 +538,7 @@ class TimeSeriesData():
         '''
         return arima.ndiffs(self._db.loc[:,self.endogeneous_var], test='adf')
 
-    def KPSS_test(self):
+    def KPSS_test(self) -> int:
         '''
         Performs a KPSS test for whether the endogeneous variable of the time series is stationary.
 
