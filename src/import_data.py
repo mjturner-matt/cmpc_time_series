@@ -16,6 +16,11 @@ foo = EndogeneousDataImporter.import_endogeneous(filename, endogeneous_var, Endo
 bar = ExogeneousDataImporter.import_exogeneous(filename, ExogeneousDataFormats.format_name)
 '''
 
+class ImportError(Exception):
+    '''
+    Errors relating to importing datasets from known filetypes.
+    '''
+
 class EndogeneousDataFormats(Enum):
     '''
     Enumerates allowed file formats for endogeneous data import.
@@ -53,7 +58,10 @@ class EndogeneousDataImporter:
         else:
             raise ValueError('Endogeneous data format not recognized')
 
-        data = func(file, endogeneous_var)
+        try:
+            data = func(file, endogeneous_var)
+        except:
+            raise ImportError('Error importing file.  Check file format, endogeneous_var name or format selection.')
         EndogeneousDataImporter._check_import(data)
         return data
 
@@ -192,8 +200,11 @@ class ExogeneousDataImporter:
             func = import_macro
         else:
             raise ValueError("Exogneous variable format not recognized.")
-
-        data = func(file)
+        
+        try:
+            data = func(file)
+        except:
+            raise ImportError('Error importing file.  Check file format, endogeneous_var name or format selection.')
         ExogeneousDataImporter._check_import(data)
         return data
 
