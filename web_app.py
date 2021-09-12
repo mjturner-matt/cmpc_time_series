@@ -6,6 +6,7 @@ from src import data
 from src.utils import *
 from matplotlib import pyplot
 import base64
+from ui.ui_utils import *
 
 # helper functions
 def get_table_download_link(dataframe : pd.DataFrame, filename : str) -> str:
@@ -97,17 +98,7 @@ exogeneous_data = ts_data.exogeneous_data
 endogeneous_data = ts_data.endogeneous_data
 future_exogeneous_data = ts_data.get_future_exogeneous()
 
-if model == time_series.TimeSeriesRegressionModels.BruteForceARIMARegression:
-    order_arg_ranges = (range(0, p+1),
-        range(0, d+1),
-        range(0, q+1),
-        range(0, P+1),
-        range(0, D+1),
-        range(0, Q+1),
-        range(m, m+1))
-    ts = getattr(time_series, model.value)(endogeneous_data, exogeneous_data, order_arg_ranges)
-else:
-    ts = getattr(time_series, model.value)((p, d, q), (P, D, Q, m))
+ts = make_model_object(model, (p,d,q), (P,D,Q,m), endogeneous_data, exogeneous_data)
 
 # PANEL
 st.title('CMPC Financial Time Series Analysis')

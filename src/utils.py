@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import sys
+
 import pandas as pd
 from sklearn.metrics import mean_squared_error
 from math import sqrt
@@ -55,9 +59,16 @@ def plot_dataframe(dataframe : pd.DataFrame, filename : str):
     # plt.show()
     plt.savefig(filename)
 
-def to_excel(dataframe : pd.DataFrame, filename : str):
-    '''Saves the dataframe to an excel file with name filename'''
+def to_excel(dataframe : pd.Series | pd.DataFrame, filename : str):
+    '''Saves the data to an excel file with name filename'''
     dataframe.to_excel(filename)
+
+def to_csv(dataframe : pd.Series | pd.DataFrame, filename : str):
+    '''Saves the data to a csv file with name filename.'''
+    if filename == sys.stdout:
+        sys.stdout.write(dataframe)
+    else:
+        dataframe.to_csv(filename)
 
 def sliding_window_rmse(sliding_window_results : pd.DataFrame) -> float:
     '''
@@ -70,3 +81,27 @@ def sliding_window_rmse(sliding_window_results : pd.DataFrame) -> float:
     The rmse of the results.
     '''
     return calc_rmse(sliding_window_results['predictions'], sliding_window_results['actuals'])
+
+def make_future_index(index : pd.PeriodIndex, n : int) -> pd.PeriodIndex:
+    '''
+    Makes a future PeriodIndex of length n.
+
+    Future index is of the same frequency as index, begins exactly one period after
+    the maximum period of index, and contains n periods with no gaps or duplicate
+    periods.
+
+    Parameters
+    ----------
+    index : pd.PeriodIndex
+        The current index.  Must be of length >0.
+    n : int
+        Number of future periods to extend.
+
+    Returns
+    -------
+    pd.PeriodIndex
+        New index of length n of the same frequency as index beginning at the period
+        directly following index.
+    '''
+    start_date = index.max() + index.freq
+    return pd.period_range(start=start_date, periods=n, freq=index.freq)

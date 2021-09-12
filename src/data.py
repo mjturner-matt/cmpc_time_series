@@ -351,7 +351,7 @@ class TimeSeriesData():
 
         Returns: 
         The future exogenous data in the form of a DataFrame with a PeriodIndex of the same frequency
-        as endogeneous_data
+        as endogeneous_data.
 
         Raises:
         ValueError if horizon is greater than available exogeneous data

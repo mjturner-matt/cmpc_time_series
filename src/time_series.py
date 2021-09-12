@@ -64,6 +64,9 @@ class TimeSeriesRegressionModels(enum.Enum):
     AutoARIMARegression = 'AutoARIMARegression'
     BruteForceARIMARegression = 'BruteForceARIMARegression'
 
+    def __str__(self):
+        return self.value
+
 class OverspecifiedError(Exception):
     '''
     Error for models which are overspecified, that is, the number of regressors is greater than or equal to 
@@ -318,6 +321,7 @@ class SARIMARegression():
             if n > len(future_X):
                 raise ValueError('Not enough future exogeneous data provided for horizon %s prediction' %n)
             future_X = future_X.iloc[:n]
+        # TODO make util
         start_date = y.index.max() + y.index.freq
         index = pd.period_range(start=start_date, periods=n, freq=y.index.freq)
         # future_X = None if future_X is None else future_X.iloc[:n]
